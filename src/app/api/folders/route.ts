@@ -25,13 +25,18 @@ function isHidden(name: string): boolean {
 const byName = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, "id", { numeric: true, sensitivity: "base" });
 
-/** GET /api/folders?root=…&path=… — subfolders (and newest files) of a folder inside a root. */
+/**
+ * GET /api/folders?root=…&path=…[&limit=…] — subfolders and newest files of a folder inside a
+ * root. `limit` is how many files to return (0–2000, default 200); 0 skips reading file details.
+ */
 export async function GET(request: NextRequest) {
   await connection();
   const denied = requireSession(request);
   if (denied) return denied;
 
   const params = request.nextUrl.searchParams;
+  const limitParam = Number(params.get("limit") ?? MAX_FILES_RETURNED);
+  const limit = Number.isInteger(limitParam) ? Math.min(Math.max(limitParam, 0), MAX_FILES_STAT) : MAX_FILES_RETURNED;
   const root = findRoot(params.get("root"));
   if (!root) return apiError(404, "Root folder tidak ditemukan.");
 
@@ -77,7 +82,7 @@ export async function GET(request: NextRequest) {
 
   const files: { name: string; size: number; modified: number }[] = [];
   await Promise.all(
-    fileNames.slice(0, MAX_FILES_STAT).map(async (name) => {
+    fileNames.slice(0, limit === 0 ? 0 : MAX_FILES_STAT).map(async (name) => {
       try {
         const stat = await fsp.stat(path.join(dir, name));
         files.push({ name, size: stat.size, modified: stat.mtimeMs });
@@ -93,7 +98,7 @@ export async function GET(request: NextRequest) {
     path: joinRelative(segments),
     segments,
     folders,
-    files: files.slice(0, MAX_FILES_RETURNED),
+    files: files.slice(0, limit),
     fileCount: fileNames.length,
     space: await freeSpace(dir),
   });

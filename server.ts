@@ -3,6 +3,7 @@ import next from "next";
 import QRCode from "qrcode";
 import { ConfigError, loadConfig } from "./src/lib/config";
 import { getLanAddresses, isAllowedHost, isPrivateIp, isSameOriginRequest, normalizeIp } from "./src/lib/network";
+import { LENGTH_HEADER } from "./src/lib/serve";
 import { initState } from "./src/lib/state";
 import { cleanupLeftoverTemps, removeActiveTempsSync } from "./src/lib/temp";
 import { cleanupStaleSessions } from "./src/lib/upload";
@@ -57,6 +58,15 @@ async function main() {
 
     // Route handlers read the client IP from here. Overwrite whatever the client sent.
     req.headers["x-yshare-ip"] = ip;
+
+    // Gallery files: restore the Content-Length that Next.js drops (see LENGTH_HEADER).
+    if (req.url?.startsWith("/api/files?")) {
+      const setHeader = res.setHeader.bind(res);
+      res.setHeader = (name: string, value: number | string | readonly string[]) =>
+        name.toLowerCase() === LENGTH_HEADER
+          ? setHeader("Content-Length", Array.isArray(value) ? value[0] : value)
+          : setHeader(name, value);
+    }
     // `handle` is assigned below, before the server starts listening.
     void handle(req, res);
   });

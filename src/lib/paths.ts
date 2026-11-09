@@ -122,6 +122,36 @@ export async function resolveSafeDir(root: Root, relativePath: string): Promise<
   return real;
 }
 
+/**
+ * Gatekeeper for reading one existing file inside a root (the gallery). Hidden files and
+ * in-progress `.yshare-*.part` uploads are refused, because the folder listing never shows them.
+ */
+export async function resolveSafeFile(
+  root: Root,
+  relativePath: string,
+  name: string,
+): Promise<{ path: string; name: string; size: number; modified: number }> {
+  const dir = await resolveSafeDir(root, relativePath);
+  const segments = splitRelativePath(name);
+  if (!segments || segments.length !== 1 || segments[0] !== name || name.startsWith(".")) {
+    throw new PathError(400, "Nama file tidak valid.");
+  }
+
+  let real: string;
+  try {
+    real = await fs.realpath(path.join(dir, name));
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") throw new PathError(404, "File tidak ditemukan.");
+    throw new PathError(403, "File tidak bisa diakses.");
+  }
+  if (!isWithin(root.realPath, real)) throw new PathError(403, "Akses ke file ini ditolak.");
+
+  const stat = await fs.stat(real);
+  if (!stat.isFile()) throw new PathError(404, "File tidak ditemukan.");
+  return { path: real, name, size: stat.size, modified: stat.mtimeMs };
+}
+
 /** `foto.jpg` → `foto (1).jpg`, `foto (2).jpg`, … */
 export function numberedName(name: string, n: number): string {
   if (n === 0) return name;

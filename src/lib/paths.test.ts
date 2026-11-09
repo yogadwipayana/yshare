@@ -8,6 +8,7 @@ import {
   numberedName,
   PathError,
   resolveSafeDir,
+  resolveSafeFile,
   sanitizeFileName,
   splitRelativePath,
   validateFolderName,
@@ -158,5 +159,50 @@ describe("resolveSafeDir", () => {
   it("returns 404 for missing folders and 400 for files", async () => {
     await expect(resolveSafeDir(root, "Tidak Ada")).rejects.toMatchObject({ status: 404 });
     await expect(resolveSafeDir(root, "file.txt")).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe("resolveSafeFile", () => {
+  let tmp: string;
+  let root: Root;
+
+  beforeAll(() => {
+    tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "yshare-test-")));
+    const rootDir = path.join(tmp, "root");
+    const outside = path.join(tmp, "outside");
+    fs.mkdirSync(path.join(rootDir, "Foto"), { recursive: true });
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(rootDir, "Foto", "IMG_001.jpg"), "jpeg");
+    fs.writeFileSync(path.join(rootDir, "Foto", ".yshare-abc.part"), "partial");
+    fs.writeFileSync(path.join(outside, "secret.txt"), "secret");
+    fs.symlinkSync(outside, path.join(rootDir, "escape"), "junction");
+    root = { id: "t", name: "Test", path: rootDir, realPath: rootDir };
+  });
+
+  afterAll(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it("returns files inside the root", async () => {
+    const file = await resolveSafeFile(root, "Foto", "IMG_001.jpg");
+    expect(file.path).toBe(path.join(root.realPath, "Foto", "IMG_001.jpg"));
+    expect(file.size).toBe(4);
+  });
+
+  it.each(["../escape/secret.txt", "..", "a/b.jpg", "a\\b.jpg", "C:\\x.jpg", "", ".hidden", ".yshare-abc.part", "x.jpg:stream"])(
+    "rejects the name %j",
+    async (name) => {
+      await expect(resolveSafeFile(root, "Foto", name)).rejects.toMatchObject({ status: 400 });
+    },
+  );
+
+  it("rejects files reached through a link that leaves the root", async () => {
+    await expect(resolveSafeFile(root, "escape", "secret.txt")).rejects.toMatchObject({ status: 403 });
+    await expect(resolveSafeFile(root, "../outside", "secret.txt")).rejects.toBeInstanceOf(PathError);
+  });
+
+  it("returns 404 for missing files and folders", async () => {
+    await expect(resolveSafeFile(root, "Foto", "tidak-ada.jpg")).rejects.toMatchObject({ status: 404 });
+    await expect(resolveSafeFile(root, "", "Foto")).rejects.toMatchObject({ status: 404 });
   });
 });

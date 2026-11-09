@@ -9,14 +9,15 @@ import {
   ArrowUpIcon,
   CheckIcon,
   ChevronRightIcon,
-  FileIcon,
   FolderIcon,
   FolderPlusIcon,
+  ImageIcon,
   RefreshIcon,
   RetryIcon,
   UploadIcon,
   XIcon,
 } from "./icons";
+import Gallery from "./Gallery";
 import QueueRow from "./QueueRow";
 
 type Location = { root: string; path: string };
@@ -59,7 +60,7 @@ export default function Uploader({ settings, authEnabled, onSessionExpired }: Pr
   const [policy, setPolicy] = useState<ConflictPolicy>(settings.conflictDefault);
   const [notice, setNotice] = useState<{ text: string; tone: "info" | "error" } | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [showFiles, setShowFiles] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [newFolder, setNewFolder] = useState<{ name: string; error: string | null; busy: boolean } | null>(null);
 
   const fileInput = useRef<HTMLInputElement>(null);
@@ -112,7 +113,8 @@ export default function Uploader({ settings, authEnabled, onSessionExpired }: Pr
     if (!locRoot) return;
     const key = locationKey({ root: locRoot, path: locPath });
     const controller = new AbortController();
-    const query = new URLSearchParams({ root: locRoot, path: locPath });
+    // Only the file count is shown here; the gallery loads the files themselves.
+    const query = new URLSearchParams({ root: locRoot, path: locPath, limit: "0" });
     fetch(`/api/folders?${query}`, { cache: "no-store", signal: controller.signal })
       .then(async (res) => {
         if (res.status === 401) return onSessionExpired();
@@ -236,7 +238,6 @@ export default function Uploader({ settings, authEnabled, onSessionExpired }: Pr
     if (!root) return;
     setChosen({ root, path });
     setNewFolder(null);
-    setShowFiles(false);
   }
 
   const segments = location?.path ? location.path.split("/") : [];
@@ -303,11 +304,21 @@ export default function Uploader({ settings, authEnabled, onSessionExpired }: Pr
           <span className="text-lg font-semibold tracking-tight">yshare</span>
           <span className="hidden text-sm text-muted sm:inline">kirim file ke PC</span>
         </div>
-        {authEnabled && (
-          <button onClick={logout} className="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-surface-muted hover:text-foreground">
-            Keluar
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setGalleryOpen(true)}
+            disabled={!location}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-surface-muted hover:text-foreground disabled:opacity-40"
+          >
+            <ImageIcon className="size-4" />
+            Galeri
           </button>
-        )}
+          {authEnabled && (
+            <button onClick={logout} className="rounded-lg px-3 py-1.5 text-sm text-muted hover:bg-surface-muted hover:text-foreground">
+              Keluar
+            </button>
+          )}
+        </div>
       </header>
 
       {notice && (
@@ -459,8 +470,12 @@ export default function Uploader({ settings, authEnabled, onSessionExpired }: Pr
             <div className="border-t border-border px-4 py-3 text-xs text-muted">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 {current.fileCount > 0 ? (
-                  <button onClick={() => setShowFiles(!showFiles)} className="underline-offset-2 hover:underline">
-                    {showFiles ? "Sembunyikan" : "Lihat"} {current.fileCount} file di folder ini
+                  <button
+                    onClick={() => setGalleryOpen(true)}
+                    className="flex items-center gap-1.5 text-accent underline-offset-2 hover:underline"
+                  >
+                    <ImageIcon className="size-4" />
+                    Lihat {current.fileCount} file di folder ini
                   </button>
                 ) : (
                   <span>Belum ada file di folder ini</span>
@@ -471,20 +486,6 @@ export default function Uploader({ settings, authEnabled, onSessionExpired }: Pr
                   </span>
                 )}
               </div>
-              {showFiles && (
-                <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto">
-                  {current.files.map((file) => (
-                    <li key={file.name} className="flex items-center gap-2">
-                      <FileIcon className="size-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate text-foreground">{file.name}</span>
-                      <span className="shrink-0 tabular-nums">{formatBytes(file.size)}</span>
-                    </li>
-                  ))}
-                  {current.fileCount > current.files.length && (
-                    <li className="pt-1">…dan {current.fileCount - current.files.length} file lainnya (ditampilkan yang terbaru)</li>
-                  )}
-                </ul>
-              )}
             </div>
           )}
         </section>
@@ -561,6 +562,18 @@ export default function Uploader({ settings, authEnabled, onSessionExpired }: Pr
           )}
         </div>
       </div>
+
+      {galleryOpen && location && (
+        <Gallery
+          root={location.root}
+          path={location.path}
+          rootName={currentRoot?.name ?? location.root}
+          reloadToken={reloadToken}
+          onNavigate={(path) => navigate(path)}
+          onClose={() => setGalleryOpen(false)}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
 
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-50 grid place-items-center bg-background/80 p-6 backdrop-blur-sm">
