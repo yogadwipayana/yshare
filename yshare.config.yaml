@@ -1,0 +1,41 @@
+# Konfigurasi yshare. Restart server setelah mengubah file ini.
+
+server:
+  port: 8080
+  # 0.0.0.0 = bisa diakses perangkat lain di Wi-Fi/LAN. 127.0.0.1 = hanya PC ini.
+  host: 0.0.0.0
+  # Tolak semua request dari IP di luar jaringan lokal.
+  lan_only: true
+  # Nama host tambahan yang boleh dipakai di browser (selain IP, localhost, dan nama PC ini).
+  allowed_hosts: []
+
+auth:
+  # Login lewat QR (token) atau PIN. Matikan hanya di jaringan rumah yang benar-benar dipercaya.
+  enabled: true
+  # Berapa lama perangkat tetap login. Semua sesi juga hilang saat server di-restart.
+  session_ttl: 12h
+
+# Folder di PC ini yang boleh dipilih sebagai tujuan upload.
+# Pengguna bisa menjelajah dan membuat subfolder di dalamnya, tapi tidak bisa keluar dari sini.
+# Path relatif dihitung dari lokasi file ini.
+roots:
+  - id: uploads
+    name: Uploads
+    path: ./uploads
+  # Contoh tambahan (hapus tanda # untuk mengaktifkan):
+  # - id: dokumen
+  #   name: Dokumen
+  #   path: C:\Users\NAMA\Documents
+  # - id: foto
+  #   name: Foto
+  #   path: D:\Foto
+
+upload:
+  # Ukuran maksimal per file (B, KB, MB, GB, TB).
+  max_file_size: 20GB
+  # Jika nama file sudah ada: rename (jadi "foto (1).jpg"), overwrite (timpa), atau skip (lewati).
+  conflict_default: rename
+  # Jumlah file yang diupload bersamaan.
+  parallel: 3
+  # Ekstensi yang ditolak, contoh: [".exe", ".bat", ".ps1"]
+  blocked_extensions: []
